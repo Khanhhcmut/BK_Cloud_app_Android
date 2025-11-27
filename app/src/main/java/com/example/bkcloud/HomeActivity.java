@@ -46,6 +46,7 @@ public class HomeActivity extends AppCompatActivity {
     TextView txtCurrentUser;
     Spinner userSpinner;
     boolean isSpinnerInitialized = false;
+    int lastValidSelection = 0;
 
     public static String token = "";
     public static String storageUrl = "";
@@ -69,7 +70,7 @@ public class HomeActivity extends AppCompatActivity {
         txtCurrentUser = headerView.findViewById(R.id.txtCurrentUser);
 
 
-        Spinner userSpinner = headerView.findViewById(R.id.userSpinner);
+        userSpinner = headerView.findViewById(R.id.userSpinner);
         txtCurrentUser.setText("User: " + username + "\nProject: " + project);
 
         List<UserItem> originalList = UserManager.loadUsers(this);
@@ -106,6 +107,8 @@ public class HomeActivity extends AppCompatActivity {
 
         isSpinnerInitialized = false;
         userSpinner.setSelection(currentIndex);
+
+        lastValidSelection = currentIndex;// rollback cancel switch
 
         userSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -286,22 +289,38 @@ public class HomeActivity extends AppCompatActivity {
         dialog.show();
     }
 
-
     private void confirmSwitchUser(UserItem user) {
-        EditText edt = new EditText(this);
-        edt.setHint("Enter password");
 
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Switch User")
-                .setMessage("Enter password for user: " + user.username)
-                .setView(edt)
-                .setPositiveButton("OK", (dialog, which) -> {
-                    String pass = edt.getText().toString().trim();
-                    validateUserPassword(user, pass);
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        View view = getLayoutInflater().inflate(R.layout.dialog_switch_user, null);
+
+        EditText edt = view.findViewById(R.id.edtSwitchPassword);
+        Button btnCancel = view.findViewById(R.id.btnCancel);
+        Button btnSave = view.findViewById(R.id.btnSave);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(view)
+                .create();
+
+        btnCancel.setOnClickListener(v -> {
+            userSpinner.setSelection(lastValidSelection); // rollback dropdown
+            dialog.dismiss();
+        });
+
+        btnSave.setOnClickListener(v -> {
+            String pass = edt.getText().toString().trim();
+
+            if (pass.isEmpty()) {
+                Toast.makeText(this, "Password required!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            validateUserPassword(user, pass);
+            dialog.dismiss();
+        });
+
+        dialog.show();
     }
+
 
     private void validateUserPassword(UserItem user, String password) {
 
@@ -316,6 +335,8 @@ public class HomeActivity extends AppCompatActivity {
                     project = user.project;
 
                     txtCurrentUser.setText("User: " + username + "\nProject: " + project);
+                    lastValidSelection = userSpinner.getSelectedItemPosition();
+                    refreshUserSpinnerInNav();
 
                     loadFolders();
 
@@ -335,8 +356,16 @@ public class HomeActivity extends AppCompatActivity {
 
     private void showConfirmPasswordDialog() {
 
-        List<UserItem> originalList = UserManager.loadUsers(this);
+        View view = getLayoutInflater().inflate(R.layout.dialog_delete_user, null);
+
+        Spinner spinner = view.findViewById(R.id.spinnerUsers);
+        EditText edtPassword = view.findViewById(R.id.edtDeletePassword);
+        Button btnCancel = view.findViewById(R.id.btnCancel);
+        Button btnYes = view.findViewById(R.id.btnYes);
+
+        // ===== LOAD + ĐƯA USER ĐANG LOGIN LÊN ĐẦU =====
         List<UserItem> userList = new ArrayList<>();
+        List<UserItem> originalList = UserManager.loadUsers(this);
 
         for (UserItem u : originalList) {
             if (u.username.equals(username) &&
@@ -347,20 +376,8 @@ public class HomeActivity extends AppCompatActivity {
             }
         }
 
-        if (userList.isEmpty()) {
-            Toast.makeText(this, "No users saved!", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        // ===== TẠO LAYOUT =====
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(50, 40, 50, 10);
-
-        // ===== SPINNER USER =====
-        Spinner spinner = new Spinner(this);
+        // ===== TẠO ADAPTER =====
         List<String> names = new ArrayList<>();
-
         for (UserItem u : userList) {
             names.add(u.username + " (" + u.project + ")");
         }
@@ -373,66 +390,98 @@ public class HomeActivity extends AppCompatActivity {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(adapter);
 
-        // ===== Ô NHẬP PASSWORD =====
-        EditText edtPassword = new EditText(this);
-        edtPassword.setHint("Enter password");
-        edtPassword.setInputType(
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(view)
+                .create();
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnYes.setOnClickListener(v -> {
+
+            int pos = spinner.getSelectedItemPosition();
+            UserItem selectedUser = userList.get(pos);
+            String inputPass = edtPassword.getText().toString().trim();
+
+            if (inputPass.isEmpty()) {
+                Toast.makeText(this, "Password required!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            boolean ok = UserManager.verifyAndDeleteUser(
+                    HomeActivity.this,
+                    selectedUser.username,
+                    selectedUser.project,
+                    inputPass
+            );
+
+            if (!ok) {
+                Toast.makeText(this, "Wrong password!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Toast.makeText(this, "User deleted!", Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
+
+            // ===== REFRESH DỮ LIỆU NGAY SAU KHI XÓA =====
+            userList.clear();
+            names.clear();
+
+            List<UserItem> freshList = UserManager.loadUsers(this);
+
+            for (UserItem u : freshList) {
+                userList.add(u);
+                names.add(u.username + " (" + u.project + ")");
+            }
+
+            adapter.notifyDataSetChanged();
+
+            edtPassword.setText("");
+
+            // ===== NẾU XÓA USER ĐANG LOGIN → LOGOUT =====
+            if (selectedUser.username.equals(username) &&
+                    selectedUser.project.equals(project)) {
+
+                token = "";
+                storageUrl = "";
+                username = "";
+                project = "";
+                userId = "";
+
+                Intent intent = new Intent(HomeActivity.this, MainActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(intent);
+                finish();
+            }
+        });
+
+        dialog.show();
+    }
+
+    private void refreshUserSpinnerInNav() {
+        View headerView = navigationView.getHeaderView(0);
+        Spinner navSpinner = headerView.findViewById(R.id.userSpinner);
+
+        List<UserItem> userList = UserManager.loadUsers(this);
+        List<String> names = new ArrayList<>();
+
+        for (UserItem u : userList) {
+            names.add(u.username + " (" + u.project + ")");
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                names
         );
-
-        edtPassword.setPadding(0, 40, 0, 0);
-
-        layout.addView(spinner);
-        layout.addView(edtPassword);
-
-        // ===== DIALOG =====
-        new AlertDialog.Builder(this)
-                .setTitle("Delete User")
-                .setView(layout)
-                .setPositiveButton("Delete", (dialog, which) -> {
-
-                    int pos = spinner.getSelectedItemPosition();
-                    UserItem selectedUser = userList.get(pos);
-                    String inputPass = edtPassword.getText().toString().trim();
-
-                    if (inputPass.isEmpty()) {
-                        Toast.makeText(this, "Password required!", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-
-                    boolean ok = UserManager.verifyAndDeleteUser(
-                            HomeActivity.this,
-                            selectedUser.username,
-                            selectedUser.project,
-                            inputPass
-                    );
-
-                    if (!ok) {
-                        Toast.makeText(this, "Wrong password!", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-
-                    Toast.makeText(this, "User deleted!", Toast.LENGTH_SHORT).show();
-
-                    // Nếu xóa đúng user đang đăng nhập → logout
-                    if (selectedUser.username.equals(username) &&
-                            selectedUser.project.equals(project)) {
-
-                        token = "";
-                        storageUrl = "";
-                        username = "";
-                        project = "";
-                        userId = "";
-
-                        Intent intent = new Intent(HomeActivity.this, MainActivity.class);
-                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                        startActivity(intent);
-                        finish();
-                    }
-
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        navSpinner.setAdapter(adapter);
+        for (int i = 0; i < userList.size(); i++) {
+            if (userList.get(i).username.equals(username) &&
+                    userList.get(i).project.equals(project)) {
+                navSpinner.setSelection(i);
+                break;
+            }
+        }
     }
 
 

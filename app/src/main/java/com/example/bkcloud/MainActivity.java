@@ -95,7 +95,7 @@ public class MainActivity extends AppCompatActivity {
 
                     UserManager.saveUser(
                             MainActivity.this,
-                            new UserItem(username, project, token, storageUrl)
+                            new UserItem(username, project, token, storageUrl, password)
                     );
 
                     Intent intent = new Intent(MainActivity.this, HomeActivity.class);

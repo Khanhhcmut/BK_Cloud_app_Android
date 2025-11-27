@@ -19,6 +19,9 @@ import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.text.InputType;
+import android.widget.LinearLayout;
+
 
 import com.google.android.material.navigation.NavigationView;
 
@@ -69,7 +72,17 @@ public class HomeActivity extends AppCompatActivity {
         Spinner userSpinner = headerView.findViewById(R.id.userSpinner);
         txtCurrentUser.setText("User: " + username + "\nProject: " + project);
 
-        List<UserItem> userList = UserManager.loadUsers(this);
+        List<UserItem> originalList = UserManager.loadUsers(this);
+        List<UserItem> userList = new ArrayList<>();
+
+        for (UserItem u : originalList) {
+            if (u.username.equals(username) &&
+                    u.project.equals(project)) {
+                userList.add(0, u);
+            } else {
+                userList.add(u);
+            }
+        }
 
         List<String> names = new ArrayList<>();
         for (UserItem u : userList) {
@@ -123,10 +136,14 @@ public class HomeActivity extends AppCompatActivity {
             if (id == R.id.nav_logout) {
                 confirmLogout();
             }
+            else if (id == R.id.nav_delete_user) {
+                showConfirmPasswordDialog();
+            }
 
             drawerLayout.closeDrawers();
             return true;
         });
+
 
         recyclerFolders = findViewById(R.id.recyclerFolders);
         recyclerFiles = findViewById(R.id.recyclerFiles);
@@ -315,6 +332,109 @@ public class HomeActivity extends AppCompatActivity {
         });
 
     }
+
+    private void showConfirmPasswordDialog() {
+
+        List<UserItem> originalList = UserManager.loadUsers(this);
+        List<UserItem> userList = new ArrayList<>();
+
+        for (UserItem u : originalList) {
+            if (u.username.equals(username) &&
+                    u.project.equals(project)) {
+                userList.add(0, u);
+            } else {
+                userList.add(u);
+            }
+        }
+
+        if (userList.isEmpty()) {
+            Toast.makeText(this, "No users saved!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // ===== TẠO LAYOUT =====
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 40, 50, 10);
+
+        // ===== SPINNER USER =====
+        Spinner spinner = new Spinner(this);
+        List<String> names = new ArrayList<>();
+
+        for (UserItem u : userList) {
+            names.add(u.username + " (" + u.project + ")");
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                names
+        );
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+
+        // ===== Ô NHẬP PASSWORD =====
+        EditText edtPassword = new EditText(this);
+        edtPassword.setHint("Enter password");
+        edtPassword.setInputType(
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
+        );
+
+        edtPassword.setPadding(0, 40, 0, 0);
+
+        layout.addView(spinner);
+        layout.addView(edtPassword);
+
+        // ===== DIALOG =====
+        new AlertDialog.Builder(this)
+                .setTitle("Delete User")
+                .setView(layout)
+                .setPositiveButton("Delete", (dialog, which) -> {
+
+                    int pos = spinner.getSelectedItemPosition();
+                    UserItem selectedUser = userList.get(pos);
+                    String inputPass = edtPassword.getText().toString().trim();
+
+                    if (inputPass.isEmpty()) {
+                        Toast.makeText(this, "Password required!", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    boolean ok = UserManager.verifyAndDeleteUser(
+                            HomeActivity.this,
+                            selectedUser.username,
+                            selectedUser.project,
+                            inputPass
+                    );
+
+                    if (!ok) {
+                        Toast.makeText(this, "Wrong password!", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    Toast.makeText(this, "User deleted!", Toast.LENGTH_SHORT).show();
+
+                    // Nếu xóa đúng user đang đăng nhập → logout
+                    if (selectedUser.username.equals(username) &&
+                            selectedUser.project.equals(project)) {
+
+                        token = "";
+                        storageUrl = "";
+                        username = "";
+                        project = "";
+                        userId = "";
+
+                        Intent intent = new Intent(HomeActivity.this, MainActivity.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        startActivity(intent);
+                        finish();
+                    }
+
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
 
 
 }

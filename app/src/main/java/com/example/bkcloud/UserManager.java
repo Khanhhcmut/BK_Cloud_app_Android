@@ -17,9 +17,9 @@ public class UserManager {
     public static void saveUser(Context ctx, UserItem user) {
         List<UserItem> users = loadUsers(ctx);
 
-        // không thêm trùng user
         for (UserItem u : users) {
-            if (u.username.equals(user.username)) {
+            if (u.username.equals(user.username) &&
+                    u.project.equals(user.project)) {
                 return;
             }
         }
@@ -42,25 +42,13 @@ public class UserManager {
                         o.getString("username"),
                         o.getString("project"),
                         o.getString("token"),
-                        o.getString("storageUrl")
+                        o.getString("storageUrl"),
+                        o.getString("password")
                 ));
             }
         } catch (Exception e) {}
 
         return list;
-    }
-
-    public static void deleteUser(Context ctx, String username) {
-        List<UserItem> list = loadUsers(ctx);
-        List<UserItem> newList = new ArrayList<>();
-
-        for (UserItem u : list) {
-            if (!u.username.equals(username)) {
-                newList.add(u);
-            }
-        }
-
-        saveList(ctx, newList);
     }
 
     private static void saveList(Context ctx, List<UserItem> users) {
@@ -73,6 +61,7 @@ public class UserManager {
                 o.put("project", u.project);
                 o.put("token", u.token);
                 o.put("storageUrl", u.storageUrl);
+                o.put("password", u.password);
                 arr.put(o);
             }
 
@@ -83,4 +72,42 @@ public class UserManager {
 
         } catch (Exception e) {}
     }
+
+    public static boolean verifyAndDeleteUser(
+            Context ctx,
+            String username,
+            String project,
+            String inputPassword
+    ) {
+        List<UserItem> users = loadUsers(ctx);
+        List<UserItem> newList = new ArrayList<>();
+        boolean deleted = false;
+
+        for (UserItem u : users) {
+
+            if (u.username.equals(username) &&
+                    u.project.equals(project)) {
+
+                // Sai mật khẩu → không xóa
+                if (!u.password.equals(inputPassword)) {
+                    return false;
+                }
+
+                // Đúng mật khẩu → bỏ qua user này (tức là xóa)
+                deleted = true;
+                continue;
+            }
+
+            newList.add(u);
+        }
+
+        if (deleted) {
+            saveList(ctx, newList);
+        }
+
+        return deleted;
+    }
+
+
+
 }

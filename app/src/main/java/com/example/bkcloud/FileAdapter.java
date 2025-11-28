@@ -8,24 +8,30 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
 
     private List<FileItem> files;
+    List<FileItem> originalList;
 
     public static class FileItem {
         public String name;
         public long size;
+        public String folder;
 
-        public FileItem(String name, long size) {
+        public FileItem(String name, long size, String folder) {
             this.name = name;
             this.size = size;
+            this.folder = folder;
         }
     }
 
+
     public FileAdapter(List<FileItem> files) {
         this.files = files;
+        this.originalList = new ArrayList<>(files);
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
@@ -64,5 +70,45 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
         String unit = "KMGTPE".charAt(exp - 1) + "B";
         return String.format("%.1f %s", bytes / Math.pow(1024, exp), unit);
     }
+
+    public void filter(String key) {
+        files.clear();
+
+        if (key.isEmpty()) {
+            files.addAll(originalList);
+        } else {
+            for (FileItem f : originalList) {
+                String nameNorm = stripAccent(f.name).toLowerCase();
+                if (nameNorm.contains(key)) {
+                    files.add(f);
+                }
+            }
+        }
+
+        notifyDataSetChanged();
+    }
+
+    public List<String> getVisibleFolders() {
+        List<String> result = new ArrayList<>();
+        for (FileItem f : files) {
+            if (!result.contains(f.folder)) {
+                result.add(f.folder);
+            }
+        }
+        return result;
+    }
+
+    private String stripAccent(String s) {
+        if (s == null) return "";
+        String temp = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD);
+        return temp.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+    }
+
+    public void setData(List<FileItem> newData) {
+        files.clear();
+        files.addAll(newData);
+        notifyDataSetChanged();
+    }
+
 
 }

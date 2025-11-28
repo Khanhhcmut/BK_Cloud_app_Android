@@ -10,7 +10,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -19,8 +22,6 @@ import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.text.InputType;
-import android.widget.LinearLayout;
 
 
 import com.google.android.material.navigation.NavigationView;
@@ -28,8 +29,10 @@ import com.google.android.material.navigation.NavigationView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Set;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -45,6 +48,8 @@ public class HomeActivity extends AppCompatActivity {
     FileAdapter fileAdapter;
     TextView txtCurrentUser;
     Spinner userSpinner;
+    EditText edtSearchAll;
+
     boolean isSpinnerInitialized = false;
     int lastValidSelection = 0;
 
@@ -53,11 +58,42 @@ public class HomeActivity extends AppCompatActivity {
     public static String username = "";
     public static String project = "";
     public static String userId = "";
+    List<FileAdapter.FileItem> allFiles = new ArrayList<>();
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
+
+        edtSearchAll = findViewById(R.id.edtSearchAll);
+
+        edtSearchAll.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+
+                int drawableRight = 2;
+
+                if (edtSearchAll.getCompoundDrawables()[drawableRight] != null) {
+
+                    int iconStart =
+                            edtSearchAll.getWidth()
+                                    - edtSearchAll.getPaddingEnd()
+                                    - edtSearchAll.getCompoundDrawables()[drawableRight].getIntrinsicWidth();
+
+                    if (event.getX() >= iconStart) {
+
+                        edtSearchAll.setText("");
+
+                        v.performClick();
+                        return true;
+                    }
+                }
+            }
+
+            v.performClick();
+            return false;
+        });
+
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -154,6 +190,50 @@ public class HomeActivity extends AppCompatActivity {
         recyclerFolders.setLayoutManager(new LinearLayoutManager(this));
         recyclerFiles.setLayoutManager(new LinearLayoutManager(this));
 
+        edtSearchAll.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String key = stripAccent(s.toString()).toLowerCase();
+
+                if (key.isEmpty()) {
+
+                    if (fileAdapter != null) {
+                        fileAdapter = new FileAdapter(new ArrayList<>());
+                        recyclerFiles.setAdapter(fileAdapter);
+                    }
+
+                    if (folderAdapter != null) {
+                        folderAdapter.resetAll();
+                    }
+
+                } else {
+                    List<FileAdapter.FileItem> matchedFiles = new ArrayList<>();
+                    Set<String> matchedFolders = new HashSet<>();
+
+                    for (FileAdapter.FileItem f : allFiles) {
+                        String nameNorm = stripAccent(f.name).toLowerCase();
+                        if (nameNorm.contains(key)) {
+                            matchedFiles.add(f);
+                            matchedFolders.add(f.folder);
+                        }
+                    }
+
+                    fileAdapter = new FileAdapter(matchedFiles);
+                    recyclerFiles.setAdapter(fileAdapter);
+
+                    if (folderAdapter != null) {
+                        folderAdapter.filterByFolderSet(new ArrayList<>(matchedFolders));
+                    }
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
         loadFolders();
 
         toggle = new ActionBarDrawerToggle(
@@ -176,28 +256,55 @@ public class HomeActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
     private void loadFolders() {
+        allFiles.clear();
         new Thread(() -> {
             try {
                 OkHttpClient client = new OkHttpClient();
 
-                // storageUrl = http://ip:port/v1/AUTH_xxx
-                Request request = new Request.Builder()
-                        .url(storageUrl) // this lists containers
+                Request listReq = new Request.Builder()
+                        .url(storageUrl) // vd: http://ip:port/v1/AUTH_xxx
                         .addHeader("X-Auth-Token", token)
                         .get()
                         .build();
 
-                Response response = client.newCall(request).execute();
+                Response listResp = client.newCall(listReq).execute();
 
-                if (response.isSuccessful()) {
-                    String body = response.body().string();
+                if (listResp.isSuccessful()) {
+                    String body = listResp.body().string();
                     String[] lines = body.split("\n");
 
-                    List<String> folders = new ArrayList<>();
+                    List<FolderAdapter.FolderItem> folders = new ArrayList<>();
+
                     for (String line : lines) {
-                        if (!line.trim().isEmpty()) {
-                            folders.add(line.trim());
-                        }
+                        String container = line.trim();
+                        if (container.isEmpty()) continue;
+
+                        long totalSize = 0L;
+                        try {
+                            String url = storageUrl + "/" + container + "?format=json";
+                            Request cReq = new Request.Builder()
+                                    .url(url)
+                                    .addHeader("X-Auth-Token", token)
+                                    .get()
+                                    .build();
+
+                            Response cResp = client.newCall(cReq).execute();
+                            if (cResp.isSuccessful()) {
+                                String json = cResp.body().string();
+                                JSONArray arr = new JSONArray(json);
+
+                                for (int i = 0; i < arr.length(); i++) {
+                                    JSONObject obj = arr.getJSONObject(i);
+                                    long size = obj.optLong("bytes", 0);
+                                    totalSize += size;
+                                }
+                            }
+                        } catch (Exception ignored) {}
+
+                        if (container.equalsIgnoreCase("config")) continue;
+
+                        folders.add(new FolderAdapter.FolderItem(container, totalSize));
+                        loadAllFilesOfFolderForSearchOnly(container);
                     }
 
                     runOnUiThread(() -> {
@@ -240,7 +347,7 @@ public class HomeActivity extends AppCompatActivity {
                         String name = obj.getString("name");
                         long size = obj.getLong("bytes");
 
-                        files.add(new FileAdapter.FileItem(name, size));
+                        files.add(new FileAdapter.FileItem(name, size, containerName));
                     }
 
                     runOnUiThread(() -> {
@@ -484,6 +591,78 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
+    private String stripAccent(String s) {
+        if (s == null) return "";
+        String temp = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD);
+        return temp.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+    }
+
+    private void loadAllFilesOfFolderForSearchOnly(String containerName) {
+        new Thread(() -> {
+            try {
+                OkHttpClient client = new OkHttpClient();
+
+                String url = storageUrl + "/" + containerName + "?format=json";
+                Request request = new Request.Builder()
+                        .url(url)
+                        .addHeader("X-Auth-Token", token)
+                        .get()
+                        .build();
+
+                Response response = client.newCall(request).execute();
+
+                if (response.isSuccessful()) {
+                    String json = response.body().string();
+                    JSONArray arr = new JSONArray(json);
+
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject obj = arr.getJSONObject(i);
+                        String name = obj.getString("name");
+                        long size = obj.getLong("bytes");
+
+                        allFiles.add(new FileAdapter.FileItem(name, size, containerName));
+                    }
+                }
+
+            } catch (Exception ignored) {}
+        }).start();
+    }
+
+    private void doSearch(String text) {
+        String key = stripAccent(text).toLowerCase();
+
+        if (key.isEmpty()) {
+
+            if (fileAdapter != null) {
+                fileAdapter = new FileAdapter(new ArrayList<>());
+                recyclerFiles.setAdapter(fileAdapter);
+            }
+
+            if (folderAdapter != null) {
+                folderAdapter.resetAll();
+            }
+
+        } else {
+
+            List<FileAdapter.FileItem> matchedFiles = new ArrayList<>();
+            Set<String> matchedFolders = new HashSet<>();
+
+            for (FileAdapter.FileItem f : allFiles) {
+                String nameNorm = stripAccent(f.name).toLowerCase();
+                if (nameNorm.contains(key)) {
+                    matchedFiles.add(f);
+                    matchedFolders.add(f.folder);
+                }
+            }
+
+            fileAdapter = new FileAdapter(matchedFiles);
+            recyclerFiles.setAdapter(fileAdapter);
+
+            if (folderAdapter != null) {
+                folderAdapter.filterByFolderSet(new ArrayList<>(matchedFolders));
+            }
+        }
+    }
 
 
 }

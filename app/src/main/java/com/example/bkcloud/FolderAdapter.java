@@ -8,6 +8,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder> {
@@ -16,11 +17,13 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
         void onClick(String folderName);
     }
 
-    List<String> folders;
+    List<FolderItem> folders;
+    List<FolderItem> originalList;
     OnFolderClick listener;
 
-    public FolderAdapter(List<String> folders, OnFolderClick listener) {
+    public FolderAdapter(List<FolderItem> folders, OnFolderClick listener) {
         this.folders = folders;
+        this.originalList = new ArrayList<>(folders);
         this.listener = listener;
     }
 
@@ -43,18 +46,62 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
 
     @Override
     public void onBindViewHolder(@NonNull FolderAdapter.ViewHolder holder, int position) {
-        String folderName = folders.get(position);
-        holder.txtFolderName.setText(folderName);
+        FolderItem item = folders.get(position);
+
+        holder.txtFolderName.setText(
+                item.name + "  (" + formatSize(item.size) + ")"
+        );
 
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
-                listener.onClick(folderName);
+                listener.onClick(item.name);
             }
         });
+
     }
 
     @Override
     public int getItemCount() {
         return folders.size();
     }
+
+    public static class FolderItem {
+        public String name;
+        public long size;
+
+        public FolderItem(String name, long size) {
+            this.name = name;
+            this.size = size;
+        }
+    }
+
+    private String formatSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        double kb = bytes / 1024.0;
+        if (kb < 1024) return String.format("%.1f KB", kb);
+        double mb = kb / 1024;
+        if (mb < 1024) return String.format("%.1f MB", mb);
+        double gb = mb / 1024;
+        return String.format("%.1f GB", gb);
+    }
+
+    public void filterByFolderSet(List<String> allowedFolders) {
+        folders.clear();
+
+        for (FolderItem f : originalList) {
+            if (allowedFolders.contains(f.name)) {
+                folders.add(f);
+            }
+        }
+
+        notifyDataSetChanged();
+    }
+
+    public void resetAll() {
+        folders.clear();
+        folders.addAll(originalList);
+        notifyDataSetChanged();
+    }
+
+
 }

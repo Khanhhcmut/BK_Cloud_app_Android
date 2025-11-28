@@ -26,6 +26,21 @@
             android:layout_height="match_parent"
             android:padding="12dp">
 
+            <EditText
+                android:id="@+id/edtSearchAll"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:hint="Search all files..."
+                android:inputType="text"
+                android:background="@drawable/loginbox"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:layout_marginBottom="8dp"
+                android:drawableEnd="@drawable/close_icn"
+                android:drawablePadding="8dp" />
+
+
+
             <!-- Folder label -->
             <TextView
                 android:text="Folders"
@@ -39,7 +54,7 @@
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerFolders"
                 android:layout_width="match_parent"
-                android:layout_height="160dp"
+                android:layout_height="180dp"
                 android:background="#EEEEEE"
                 android:padding="6dp" />
 

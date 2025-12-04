@@ -1,5 +1,6 @@
 package com.example.bkcloud;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.drawerlayout.widget.DrawerLayout;
@@ -9,7 +10,11 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.OpenableColumns;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.MenuItem;
@@ -35,10 +40,18 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Set;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.RequestBody;
+import okhttp3.MediaType;
+
+import androidx.documentfile.provider.DocumentFile;
+import android.util.Pair;
+
 
 public class HomeActivity extends AppCompatActivity {
 
@@ -61,12 +74,19 @@ public class HomeActivity extends AppCompatActivity {
     public static String project = "";
     public static String userId = "";
     List<FileAdapter.FileItem> allFiles = new ArrayList<>();
+    String currentSelectedFolder = null;
+    int pendingUpload = 0;
+    boolean batchUploadMode = false;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
+
+        if (android.os.Build.VERSION.SDK_INT < 33) {
+            requestPermissions(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, 2001);
+        }
 
         edtSearchAll = findViewById(R.id.edtSearchAll);
 
@@ -259,8 +279,35 @@ public class HomeActivity extends AppCompatActivity {
         });
 
         fabCenter.setOnClickListener(v -> {
-            Toast.makeText(this, "Main Action", Toast.LENGTH_SHORT).show();
+            if (currentSelectedFolder == null) {
+                Toast.makeText(this, "Please select folder to upload", Toast.LENGTH_SHORT).show();
+                return;
+            }
 
+            View view = getLayoutInflater().inflate(R.layout.dialog_upload_select, null);
+            AlertDialog dialog = new AlertDialog.Builder(this).setView(view).create();
+
+            Button btnUploadFile = view.findViewById(R.id.btnUploadFile);
+            Button btnUploadFolder = view.findViewById(R.id.btnUploadFolder);
+            Button btnCancel = view.findViewById(R.id.btnCancel);
+
+            btnUploadFile.setOnClickListener(x -> {
+                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                i.setType("*/*");
+                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                startActivityForResult(i, 1001);
+                dialog.dismiss();
+            });
+
+            btnUploadFolder.setOnClickListener(x -> {
+                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                startActivityForResult(i, 1002);
+                dialog.dismiss();
+            });
+
+            btnCancel.setOnClickListener(x -> dialog.dismiss());
+
+            dialog.show();
         });
 
         btnBackup.setOnClickListener(v -> {
@@ -331,6 +378,15 @@ public class HomeActivity extends AppCompatActivity {
 
                     runOnUiThread(() -> {
                         folderAdapter = new FolderAdapter(folders, folderName -> {
+                            if (folderName.equals(currentSelectedFolder)) {
+                                currentSelectedFolder = null;
+                                runOnUiThread(() -> {
+                                    fileAdapter = new FileAdapter(new ArrayList<>());
+                                    recyclerFiles.setAdapter(fileAdapter);
+                                });
+                                return;
+                            }
+                            currentSelectedFolder = folderName;
                             loadFiles(folderName);
                         });
                         recyclerFolders.setAdapter(folderAdapter);
@@ -686,6 +742,228 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (resultCode != RESULT_OK || data == null) return;
+        if (currentSelectedFolder == null) return;
+
+        if (requestCode == 1001) {
+
+            if (data.getClipData() != null) {
+                int count = data.getClipData().getItemCount();
+                pendingUpload = count;
+                batchUploadMode = true;
+
+                for (int i = 0; i < count; i++) {
+                    Uri fileUri = data.getClipData().getItemAt(i).getUri();
+                    uploadToSwift(currentSelectedFolder, fileUri);
+                }
+
+            } else if (data.getData() != null) {
+                pendingUpload = 1;
+                batchUploadMode = true;
+                uploadToSwift(currentSelectedFolder, data.getData());
+            }
+
+        } else if (requestCode == 1002) {
+
+            Uri treeUri = data.getData();
+
+            try {
+                getContentResolver().takePersistableUriPermission(
+                        treeUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                );
+            } catch (Exception ignored) {}
+
+            uploadDirectory(treeUri);
+        }
+
+    }
+
+    private void uploadToSwift(String containerName, Uri fileUri) {
+        new Thread(() -> {
+            InputStream inputStream = null;
+            try {
+                String fileName = getFileName(fileUri);
+
+                inputStream = getContentResolver().openInputStream(fileUri);
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                int nRead;
+                byte[] data = new byte[4096];
+
+                while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+                    buffer.write(data, 0, nRead);
+                }
+
+                byte[] fileBytes = buffer.toByteArray();
+
+                String uploadUrl = storageUrl + "/" + containerName + "/" + fileName;
+
+                OkHttpClient client = new OkHttpClient();
+
+                RequestBody body = RequestBody.create(
+                        fileBytes,
+                        MediaType.parse("application/octet-stream")
+                );
+
+                Request request = new Request.Builder()
+                        .url(uploadUrl)
+                        .put(body)
+                        .addHeader("X-Auth-Token", token)
+                        .build();
+
+                client.newCall(request).execute();
+
+            } catch (Exception ignored) {
+            } finally {
+                try { if (inputStream != null) inputStream.close(); } catch (Exception ignored) {}
+
+                if (batchUploadMode) {
+                    runOnUiThread(() -> {
+                        pendingUpload--;
+                        if (pendingUpload == 0) {
+                            batchUploadMode = false;
+                            loadFiles(containerName);
+                            loadFolders();
+                            Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            }
+        }).start();
+    }
+
+    private String getFileName(Uri uri) {
+        String result = null;
+
+        if (uri.getScheme().equals("content")) {
+            Cursor cursor = getContentResolver().query(uri, null, null, null, null);
+            try {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (index != -1) result = cursor.getString(index);
+                }
+            } finally {
+                if (cursor != null) cursor.close();
+            }
+        }
+
+        if (result == null) {
+            result = uri.getPath();
+            int cut = result.lastIndexOf('/');
+            if (cut != -1) result = result.substring(cut + 1);
+        }
+
+        return result;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == 2001) {
+            if (grantResults.length == 0 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void uploadDirectory(Uri treeUri) {
+        new Thread(() -> {
+            try {
+                DocumentFile dir = DocumentFile.fromTreeUri(this, treeUri);
+                if (dir == null) return;
+
+                String rootName = dir.getName();
+                if (rootName == null) rootName = "";
+
+                List<Pair<String, Uri>> files = new ArrayList<>();
+                collectFilesRecursively(dir, rootName, files);
+
+                int total = files.size();
+
+                if (total == 0) {
+                    runOnUiThread(() ->
+                            Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show()
+                    );
+                    return;
+                }
+
+                int[] done = {0};
+
+                for (Pair<String, Uri> p : files) {
+                    String objectPath = p.first;
+                    Uri fileUri = p.second;
+
+                    uploadToSwiftWithCallback(currentSelectedFolder, fileUri, objectPath, () -> {
+                        done[0]++;
+                        if (done[0] == total) {
+                            runOnUiThread(() -> {
+                                loadFiles(currentSelectedFolder);
+                                loadFolders();
+                                Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
+                            });
+                        }
+                    });
+                }
+
+            } catch (Exception ignored) {}
+        }).start();
+    }
+
+    private void collectFilesRecursively(DocumentFile dir, String base, List<Pair<String, Uri>> out) {
+        for (DocumentFile f : dir.listFiles()) {
+            if (f.isDirectory()) {
+                String newBase = base.isEmpty() ? f.getName() : base + "/" + f.getName();
+                collectFilesRecursively(f, newBase, out);
+            } else if (f.isFile()) {
+                String rel = base.isEmpty() ? f.getName() : base + "/" + f.getName();
+                out.add(new Pair<>(rel, f.getUri()));
+            }
+        }
+    }
+
+    private void uploadToSwiftWithCallback(String containerName, Uri fileUri, String objectName, Runnable onDone) {
+        new Thread(() -> {
+            InputStream inputStream = null;
+            try {
+                inputStream = getContentResolver().openInputStream(fileUri);
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                byte[] data = new byte[4096];
+                int nRead;
+
+                while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+                    buffer.write(data, 0, nRead);
+                }
+
+                byte[] fileBytes = buffer.toByteArray();
+                String uploadUrl = storageUrl + "/" + containerName + "/" + objectName;
+
+                OkHttpClient client = new OkHttpClient();
+
+                RequestBody body = RequestBody.create(
+                        fileBytes,
+                        MediaType.parse("application/octet-stream")
+                );
+
+                Request request = new Request.Builder()
+                        .url(uploadUrl)
+                        .put(body)
+                        .addHeader("X-Auth-Token", token)
+                        .build();
+
+                client.newCall(request).execute();
+
+            } catch (Exception ignored) {}
+            finally {
+                try { if (inputStream != null) inputStream.close(); } catch (Exception ignored) {}
+                if (onDone != null) onDone.run();
+            }
+        }).start();
+    }
 
 }
 

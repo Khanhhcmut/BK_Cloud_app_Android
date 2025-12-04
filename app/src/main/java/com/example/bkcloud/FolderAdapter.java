@@ -20,6 +20,7 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
     List<FolderItem> folders;
     List<FolderItem> originalList;
     OnFolderClick listener;
+    int selectedPosition = -1;
 
     public FolderAdapter(List<FolderItem> folders, OnFolderClick listener) {
         this.folders = folders;
@@ -53,12 +54,18 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
         );
 
         holder.itemView.setOnClickListener(v -> {
-            if (listener != null) {
-                listener.onClick(item.name);
-            }
+            selectedPosition = holder.getAdapterPosition();
+            notifyDataSetChanged();
+            listener.onClick(item.name);
         });
 
+        if (holder.getAdapterPosition() == selectedPosition) {
+            holder.itemView.setBackgroundResource(R.drawable.folder_selected_bg);
+        } else {
+            holder.itemView.setBackgroundResource(android.R.color.transparent);
+        }
     }
+
 
     @Override
     public int getItemCount() {

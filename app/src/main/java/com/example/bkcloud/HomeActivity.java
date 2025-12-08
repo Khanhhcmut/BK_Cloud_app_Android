@@ -1023,6 +1023,11 @@ public class HomeActivity extends AppCompatActivity {
         btnCreate.setOnClickListener(v -> {
             String folderName = edtFolderName.getText().toString().trim();
             if (folderName.isEmpty()) return;
+            String sys = folderName.toLowerCase();
+            if (sys.equals("backup") || sys.equals("dicom") || sys.equals("config")) {
+                Toast.makeText(this, "This is system folder name, please change another name", Toast.LENGTH_SHORT).show();
+                return;
+            }
             dialog.dismiss();
             createEmptyFolder(folderName);
         });

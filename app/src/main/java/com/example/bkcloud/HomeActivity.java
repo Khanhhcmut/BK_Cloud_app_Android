@@ -38,18 +38,19 @@ import com.google.android.material.navigation.NavigationView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Set;
 import java.io.InputStream;
-import java.io.ByteArrayOutputStream;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.RequestBody;
 import okhttp3.MediaType;
+import okio.BufferedSink;
 
 import androidx.documentfile.provider.DocumentFile;
 import android.util.Pair;
@@ -766,13 +767,33 @@ public class HomeActivity extends AppCompatActivity {
 
                 for (int i = 0; i < count; i++) {
                     Uri fileUri = data.getClipData().getItemAt(i).getUri();
-                    uploadToSwift(currentSelectedFolder, fileUri);
+                    String fileName = getFileName(fileUri);
+
+                    uploadToSwift(currentSelectedFolder, fileUri, fileName, () -> {
+                        pendingUpload--;
+                        if (pendingUpload == 0) {
+                            batchUploadMode = false;
+                            loadFiles(currentSelectedFolder);
+                            loadFolders();
+                            Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
+                        }
+                    });
                 }
 
             } else if (data.getData() != null) {
+                Uri fileUri = data.getData();
+                String fileName = getFileName(fileUri);
+
                 pendingUpload = 1;
                 batchUploadMode = true;
-                uploadToSwift(currentSelectedFolder, data.getData());
+
+                uploadToSwift(currentSelectedFolder, fileUri, fileName, () -> {
+                    pendingUpload = 0;
+                    batchUploadMode = false;
+                    loadFiles(currentSelectedFolder);
+                    loadFolders();
+                    Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
+                });
             }
 
         } else if (requestCode == 1002) {  // Upload FOLDER
@@ -791,58 +812,44 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
-    private void uploadToSwift(String containerName, Uri fileUri) {
+    private void uploadToSwift(String container, Uri uri, String objectName, Runnable onDone) {
         new Thread(() -> {
-            InputStream inputStream = null;
             try {
-                String fileName = getFileName(fileUri);
+                InputStream in = getContentResolver().openInputStream(uri);
 
-                inputStream = getContentResolver().openInputStream(fileUri);
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                int nRead;
-                byte[] data = new byte[4096];
+                RequestBody body = new RequestBody() {
+                    @Override
+                    public MediaType contentType() {
+                        return MediaType.parse("application/octet-stream");
+                    }
 
-                while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
-                    buffer.write(data, 0, nRead);
-                }
+                    @Override
+                    public void writeTo(BufferedSink sink) throws IOException {
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = in.read(buffer)) != -1) {
+                            sink.write(buffer, 0, read);
+                        }
+                    }
+                };
 
-                byte[] fileBytes = buffer.toByteArray();
+                OkHttpClient client = new OkHttpClient.Builder().build();
+                String url = storageUrl + "/" + container + "/" + objectName;
 
-                String uploadUrl = storageUrl + "/" + containerName + "/" + fileName;
-
-                OkHttpClient client = new OkHttpClient();
-
-                RequestBody body = RequestBody.create(
-                        fileBytes,
-                        MediaType.parse("application/octet-stream")
-                );
-
-                Request request = new Request.Builder()
-                        .url(uploadUrl)
+                Request req = new Request.Builder()
+                        .url(url)
                         .put(body)
                         .addHeader("X-Auth-Token", token)
                         .build();
 
-                client.newCall(request).execute();
+                client.newCall(req).execute();
 
-            } catch (Exception ignored) {
-            } finally {
-                try { if (inputStream != null) inputStream.close(); } catch (Exception ignored) {}
+                runOnUiThread(onDone);
 
-                if (batchUploadMode) {
-                    runOnUiThread(() -> {
-                        pendingUpload--;
-                        if (pendingUpload == 0) {
-                            batchUploadMode = false;
-                            loadFiles(containerName);
-                            loadFolders();
-                            Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                }
-            }
+            } catch (Exception ignored) {}
         }).start();
     }
+
 
     private String getFileName(Uri uri) {
         String result = null;
@@ -958,42 +965,42 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
-    private void uploadToSwiftWithCallback(String containerName, Uri fileUri, String objectName, Runnable onDone) {
+    private void uploadToSwiftWithCallback(String container, Uri uri, String objectName, Runnable onDone) {
         new Thread(() -> {
-            InputStream inputStream = null;
             try {
-                inputStream = getContentResolver().openInputStream(fileUri);
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                byte[] data = new byte[4096];
-                int nRead;
+                InputStream in = getContentResolver().openInputStream(uri);
 
-                while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
-                    buffer.write(data, 0, nRead);
-                }
+                RequestBody body = new RequestBody() {
+                    @Override
+                    public MediaType contentType() {
+                        return MediaType.parse("application/octet-stream");
+                    }
 
-                byte[] fileBytes = buffer.toByteArray();
-                String uploadUrl = storageUrl + "/" + containerName + "/" + objectName;
+                    @Override
+                    public void writeTo(BufferedSink sink) throws IOException {
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = in.read(buffer)) != -1) {
+                            sink.write(buffer, 0, read);
+                        }
+                    }
+                };
 
-                OkHttpClient client = new OkHttpClient();
+                OkHttpClient client = new OkHttpClient.Builder().build();
 
-                RequestBody body = RequestBody.create(
-                        fileBytes,
-                        MediaType.parse("application/octet-stream")
-                );
+                String url = storageUrl + "/" + container + "/" + objectName;
 
-                Request request = new Request.Builder()
-                        .url(uploadUrl)
+                Request req = new Request.Builder()
+                        .url(url)
                         .put(body)
                         .addHeader("X-Auth-Token", token)
                         .build();
 
-                client.newCall(request).execute();
+                Response resp = client.newCall(req).execute();
+
+                runOnUiThread(onDone);
 
             } catch (Exception ignored) {}
-            finally {
-                try { if (inputStream != null) inputStream.close(); } catch (Exception ignored) {}
-                if (onDone != null) onDone.run();
-            }
         }).start();
     }
 

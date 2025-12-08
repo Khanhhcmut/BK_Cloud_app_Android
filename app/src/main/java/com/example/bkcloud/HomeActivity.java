@@ -895,6 +895,14 @@ public class HomeActivity extends AppCompatActivity {
                 String rootName = dir.getName();
                 if (rootName == null) rootName = "";
 
+                String sys = rootName.toLowerCase();
+                if (sys.equals("backup") || sys.equals("dicom") || sys.equals("config")) {
+                    runOnUiThread(() ->
+                            Toast.makeText(this, "Can't upload, duplicate system folder name", Toast.LENGTH_SHORT).show()
+                    );
+                    return;
+                }
+
                 boolean uploadToNewContainer = (currentSelectedFolder == null);
 
                 String containerName = uploadToNewContainer ? rootName : currentSelectedFolder;

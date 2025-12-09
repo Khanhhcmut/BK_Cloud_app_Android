@@ -219,10 +219,47 @@ public class HomeActivity extends AppCompatActivity {
             else if (id == R.id.nav_delete_user) {
                 showConfirmPasswordDialog();
             }
+            else if (id == R.id.nav_help) {
+                Intent intent = new Intent(this, HelpActivity.class);
+                startActivity(intent);
+            }
+            else if (id == R.id.nav_myfile) {
+                currentSelectedFolder = null;
+
+                fileAdapter = new FileAdapter(new ArrayList<>());
+                fileAdapter.setListener(new FileAdapter.FileListener() {
+                    @Override
+                    public void onLongPress(String key) {
+                        HomeActivity.this.onItemLongPress(key);
+                    }
+
+                    @Override
+                    public void onToggleSelect(String key) {
+                        HomeActivity.this.onItemToggle(key);
+                    }
+
+                    @Override
+                    public void onClickDeleteIcon() {
+                        HomeActivity.this.onDeleteIconClick();
+                    }
+                });
+
+                recyclerFiles.setAdapter(fileAdapter);
+                loadFolders();
+                Toast.makeText(this, "My Files", Toast.LENGTH_SHORT).show();
+            }
+            else if (id == R.id.nav_dashboard) {
+                Toast.makeText(this, "Dashboard", Toast.LENGTH_SHORT).show();
+            }
+            else if (id == R.id.nav_backup) {
+                Toast.makeText(this, "Backup", Toast.LENGTH_SHORT).show();
+            }
 
             drawerLayout.closeDrawers();
             return true;
         });
+
+
 
 
         recyclerFolders = findViewById(R.id.recyclerFolders);

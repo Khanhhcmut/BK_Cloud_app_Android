@@ -5,14 +5,32 @@
             android:id="@+id/nav_delete_user"
             android:title="Delete User"
             android:icon="@drawable/delete_icn"/>
+
+        <item
+            android:id="@+id/nav_help"
+            android:title="Help"
+            android:icon="@drawable/help_icn"/>
     </group>
 
     <group android:id="@+id/group_main">
+
         <item
             android:id="@+id/nav_myfile"
             android:title="My File"
             android:icon="@drawable/myfile_icn"/>
+
+        <item
+            android:id="@+id/nav_dashboard"
+            android:title="Dashboard"
+            android:icon="@drawable/dashboard_icn"/>
+
+        <item
+            android:id="@+id/nav_backup"
+            android:title="Backup"
+            android:icon="@drawable/backup_icn"/>
+
     </group>
+
 
     <group android:id="@+id/group_system">
         <item

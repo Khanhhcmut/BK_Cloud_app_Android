@@ -1,15 +1,21 @@
 package com.example.bkcloud;
 
+import android.graphics.Color;
+import android.os.Handler;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder> {
 
@@ -22,20 +28,39 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
     OnFolderClick listener;
     String selectedFolderName = null;
 
+    boolean deleteMode = false;
+    Set<String> selectedSet = new HashSet<>();
+    FolderListener deleteListener;
+
     public FolderAdapter(List<FolderItem> folders, OnFolderClick listener) {
         this.folders = folders;
         this.originalList = new ArrayList<>(folders);
         this.listener = listener;
     }
 
+    public interface FolderListener {
+        void onLongPress(String name);
+        void onToggleSelect(String name);
+        void onDeleteIcon();
+    }
+
     public static class ViewHolder extends RecyclerView.ViewHolder {
         TextView txtFolderName;
+        ImageView deleteIcon;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             txtFolderName = itemView.findViewById(R.id.txtFolderName);
+            deleteIcon = itemView.findViewById(R.id.deleteIcon);
         }
     }
+
+    public void setDeleteMode(boolean mode, Set<String> set) {
+        deleteMode = mode;
+        selectedSet = new HashSet<>(set);
+        notifyDataSetChanged();
+    }
+
 
     @NonNull
     @Override
@@ -48,12 +73,46 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
     @Override
     public void onBindViewHolder(@NonNull FolderAdapter.ViewHolder holder, int position) {
         FolderItem item = folders.get(position);
+        String key = item.name;
 
         holder.txtFolderName.setText(
                 item.name + "  (" + formatSize(item.size) + ")"
         );
+        holder.itemView.setOnTouchListener(new View.OnTouchListener() {
+            Handler handler = new Handler();
+            boolean isLong = false;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    isLong = false;
+                    handler.postDelayed(() -> {
+                        isLong = true;
+                        if (deleteListener != null) deleteListener.onLongPress(key);
+                    }, 1500);
+                }
+
+                if (event.getAction() == MotionEvent.ACTION_UP ||
+                        event.getAction() == MotionEvent.ACTION_CANCEL) {
+
+                    handler.removeCallbacksAndMessages(null);
+
+                    if (deleteMode && !isLong) {
+                        if (deleteListener != null) deleteListener.onToggleSelect(key);
+                    }
+                }
+
+                return false;
+            }
+        });
 
         holder.itemView.setOnClickListener(v -> {
+            if (deleteMode) {
+                if (deleteListener != null) deleteListener.onToggleSelect(key);
+                return;
+            }
+
+            // logic cũ khi không ở delete mode
             if (item.name.equals(selectedFolderName)) {
                 selectedFolderName = null;
                 listener.onClick(null);
@@ -64,10 +123,27 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
             notifyDataSetChanged();
         });
 
-        if (item.name.equals(selectedFolderName)) {
-            holder.itemView.setBackgroundResource(R.drawable.folder_selected_bg);
+        holder.deleteIcon.setOnClickListener(v -> {
+            if (deleteListener != null) deleteListener.onDeleteIcon();
+        });
+
+        if (deleteMode) {
+            holder.deleteIcon.setVisibility(View.VISIBLE);
+
+            if (selectedSet.contains(item.name)) {
+                holder.itemView.setBackgroundColor(Color.parseColor("#33FF0000"));
+            } else {
+                holder.itemView.setBackgroundColor(Color.TRANSPARENT);
+            }
+
         } else {
-            holder.itemView.setBackgroundResource(android.R.color.transparent);
+            holder.deleteIcon.setVisibility(View.GONE);
+
+            if (item.name.equals(selectedFolderName)) {
+                holder.itemView.setBackgroundResource(R.drawable.folder_selected_bg);
+            } else {
+                holder.itemView.setBackgroundResource(android.R.color.transparent);
+            }
         }
     }
 

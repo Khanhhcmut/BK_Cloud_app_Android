@@ -1,24 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
     android:padding="10dp"
     android:background="@drawable/item_card_bg"
     android:layout_marginBottom="8dp">
 
     <TextView
         android:id="@+id/txtFileName"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="16sp"
         android:textColor="#000000" />
 
+    <ImageView
+        android:id="@+id/deleteIcon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_alignParentRight="true"
+        android:layout_marginTop="2dp"
+        android:src="@drawable/delete_icn"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/txtFileSize"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_below="@id/txtFileName"
         android:textSize="13sp"
         android:textColor="#666666"
         android:layout_marginTop="4dp" />
-</LinearLayout>
+</RelativeLayout>

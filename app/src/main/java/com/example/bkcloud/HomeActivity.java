@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -80,6 +81,8 @@ public class HomeActivity extends AppCompatActivity {
     String currentSelectedFolder = null;
     int pendingUpload = 0;
     boolean batchUploadMode = false;
+    boolean deleteMode = false;
+    Set<String> selectedDeleteItems = new HashSet<>();
 
 
     @Override
@@ -430,6 +433,23 @@ public class HomeActivity extends AppCompatActivity {
                         });
                         recyclerFolders.setAdapter(folderAdapter);
                         folderAdapter.setSelectedFolder(currentSelectedFolder);
+
+                        folderAdapter.deleteListener = new FolderAdapter.FolderListener() {
+                            @Override
+                            public void onLongPress(String name) {
+                                HomeActivity.this.onItemLongPress(name);
+                            }
+
+                            @Override
+                            public void onToggleSelect(String name) {
+                                HomeActivity.this.onItemToggle(name);
+                            }
+
+                            @Override
+                            public void onDeleteIcon() {
+                                HomeActivity.this.onDeleteIconClick();
+                            }
+                        };
                     });
 
                 }
@@ -473,6 +493,24 @@ public class HomeActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         fileAdapter = new FileAdapter(files);
                         recyclerFiles.setAdapter(fileAdapter);
+
+                        fileAdapter.setListener(new FileAdapter.FileListener() {
+                            @Override
+                            public void onLongPress(String key) {
+                                HomeActivity.this.onItemLongPress(key);
+                            }
+
+                            @Override
+                            public void onToggleSelect(String key) {
+                                HomeActivity.this.onItemToggle(key);
+                            }
+
+                            @Override
+                            public void onClickDeleteIcon() {
+                                HomeActivity.this.onDeleteIconClick();
+                            }
+                        });
+
                     });
                 }
 
@@ -481,6 +519,137 @@ public class HomeActivity extends AppCompatActivity {
             }
         }).start();
     }
+
+    private void refreshAdaptersToShowDeleteMode() {
+        if (fileAdapter != null) fileAdapter.setDeleteMode(deleteMode, selectedDeleteItems);
+        if (folderAdapter != null) folderAdapter.setDeleteMode(deleteMode, selectedDeleteItems);
+    }
+
+    public void onItemLongPress(String key) {
+        if (!deleteMode) {
+            deleteMode = true;
+            selectedDeleteItems.clear();
+            selectedDeleteItems.add(key);
+        } else {
+            deleteMode = false;
+            selectedDeleteItems.clear();
+        }
+        refreshAdaptersToShowDeleteMode();
+    }
+
+    public void onItemToggle(String key) {
+        if (!deleteMode) return;
+
+        if (selectedDeleteItems.contains(key))
+            selectedDeleteItems.remove(key);
+        else
+            selectedDeleteItems.add(key);
+
+        refreshAdaptersToShowDeleteMode();
+    }
+
+    public void onDeleteIconClick() {
+        if (selectedDeleteItems.isEmpty()) return;
+
+        showDeleteConfirmDialog();
+    }
+
+    private void showDeleteConfirmDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.setContentView(R.layout.dialog_delete_confirm);
+
+        Button btnCancel = dialog.findViewById(R.id.btnCancel);
+        Button btnYes = dialog.findViewById(R.id.btnYes);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnYes.setOnClickListener(v -> {
+            dialog.dismiss();
+            deleteSelectedItems();
+        });
+
+        dialog.show();
+    }
+
+    private void deleteSelectedItems() {
+        new Thread(() -> {
+            OkHttpClient client = new OkHttpClient();
+
+            for (String key : selectedDeleteItems) {
+                try {
+                    String low = key.toLowerCase();
+                    if (!key.contains("/") && (low.equals("backup") || low.equals("dicom") || low.equals("config"))) {
+                        continue;
+                    }
+
+                    if (key.contains("/")) {
+                        String folder = key.substring(0, key.indexOf("/"));
+                        String name = key.substring(key.indexOf("/") + 1);
+
+                        String url = storageUrl + "/" + folder + "/" + name;
+
+                        Request req = new Request.Builder()
+                                .url(url)
+                                .delete()
+                                .addHeader("X-Auth-Token", token)
+                                .build();
+
+                        client.newCall(req).execute();
+
+                    } else {
+                        String listUrl = storageUrl + "/" + key + "?format=json";
+
+                        Request listReq = new Request.Builder()
+                                .url(listUrl)
+                                .get()
+                                .addHeader("X-Auth-Token", token)
+                                .build();
+
+                        Response resp = client.newCall(listReq).execute();
+                        String body = resp.body().string();
+                        JSONArray arr = new JSONArray(body);
+
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject obj = arr.getJSONObject(i);
+                            String fname = obj.getString("name");
+
+                            String fUrl = storageUrl + "/" + key + "/" + fname;
+
+                            Request delFile = new Request.Builder()
+                                    .url(fUrl)
+                                    .delete()
+                                    .addHeader("X-Auth-Token", token)
+                                    .build();
+
+                            client.newCall(delFile).execute();
+                        }
+
+                        String delFolderUrl = storageUrl + "/" + key;
+
+                        Request delFolder = new Request.Builder()
+                                .url(delFolderUrl)
+                                .delete()
+                                .addHeader("X-Auth-Token", token)
+                                .build();
+
+                        client.newCall(delFolder).execute();
+                    }
+
+                } catch (Exception ignored) {}
+            }
+
+            deleteMode = false;
+            selectedDeleteItems.clear();
+
+            runOnUiThread(() -> {
+                loadFolders();
+                if (currentSelectedFolder != null) loadFiles(currentSelectedFolder);
+                Toast.makeText(this, "Delete complete", Toast.LENGTH_SHORT).show();
+            });
+
+        }).start();
+    }
+
 
     private void doLogout() {
         token = "";

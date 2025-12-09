@@ -1,8 +1,12 @@
 package com.example.bkcloud;
 
+import android.graphics.Color;
+import android.os.Handler;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -11,13 +15,18 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
 
     private List<FileItem> files;
     List<FileItem> originalList;
+    boolean deleteMode = false;
+    Set<String> selectedSet = new HashSet<>();
+    FileListener listener;
 
     public static class FileItem {
         public String name;
@@ -41,12 +50,20 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
         TextView txtFileName, txtFileSize;
+        ImageView deleteIcon;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             txtFileName = itemView.findViewById(R.id.txtFileName);
             txtFileSize = itemView.findViewById(R.id.txtFileSize);
+            deleteIcon = itemView.findViewById(R.id.deleteIcon);
         }
+    }
+
+    public interface FileListener {
+        void onLongPress(String fileName);
+        void onToggleSelect(String fileName);
+        void onClickDeleteIcon();
     }
 
     @NonNull
@@ -61,10 +78,76 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
     public void onBindViewHolder(@NonNull FileAdapter.ViewHolder holder, int position) {
         FileItem file = files.get(position);
         holder.txtFileName.setText(file.name);
+        String key = file.folder + "/" + file.name;
+
+        holder.itemView.setOnTouchListener(new View.OnTouchListener() {
+            Handler handler = new Handler();
+            boolean isLong = false;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    isLong = false;
+                    handler.postDelayed(() -> {
+                        isLong = true;
+                        if (listener != null) listener.onLongPress(key);
+                    }, 1500);
+                }
+
+                if (event.getAction() == MotionEvent.ACTION_UP ||
+                        event.getAction() == MotionEvent.ACTION_CANCEL) {
+
+                    handler.removeCallbacksAndMessages(null);
+
+                    if (deleteMode && !isLong) {
+                        if (listener != null) listener.onToggleSelect(key);
+                    }
+                }
+
+                return false;
+            }
+        });
+
+        holder.itemView.setOnClickListener(v -> {
+            if (deleteMode) {
+                if (listener != null) listener.onToggleSelect(key);
+            }
+        });
+
+        holder.deleteIcon.setOnClickListener(v -> {
+            if (listener != null) listener.onClickDeleteIcon();
+        });
+
         holder.txtFileSize.setText(
                 formatSize(file.size) + " • " + formatLastModified(file.last)
         );
+
+        if (deleteMode) {
+            holder.deleteIcon.setVisibility(View.VISIBLE);
+
+            if (selectedSet.contains(key)) {
+                holder.itemView.setBackgroundColor(Color.parseColor("#33FF0000"));
+            } else {
+                holder.itemView.setBackgroundColor(Color.TRANSPARENT);
+            }
+
+        } else {
+            holder.deleteIcon.setVisibility(View.GONE);
+            holder.itemView.setBackgroundColor(Color.TRANSPARENT);
+        }
+
     }
+
+    public void setDeleteMode(boolean mode, Set<String> set) {
+        deleteMode = mode;
+        selectedSet = new HashSet<>(set);
+        notifyDataSetChanged();
+    }
+
+    public void setListener(FileListener l) {
+        this.listener = l;
+    }
+
 
     @Override
     public int getItemCount() {

@@ -1,11 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<TextView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/txtFolderName"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:padding="14dp"
-    android:textSize="18sp"
-    android:textColor="#000000"
     android:background="@drawable/item_card_bg"
-    android:layout_marginBottom="8dp"
-    android:clickable="true" />
+    android:layout_marginBottom="8dp">
+
+    <TextView
+        android:id="@+id/txtFolderName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="18sp"
+        android:textColor="#000000" />
+
+    <ImageView
+        android:id="@+id/deleteIcon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_alignParentRight="true"
+        android:src="@drawable/delete_icn"
+        android:visibility="gone" />
+
+</RelativeLayout>

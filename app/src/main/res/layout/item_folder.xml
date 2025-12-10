@@ -6,10 +6,22 @@
     android:background="@drawable/item_card_bg"
     android:layout_marginBottom="8dp">
 
+    <ImageView
+        android:id="@+id/checkIcon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_alignParentStart="true"
+        android:layout_centerVertical="true"
+        android:src="@drawable/checkbox_icn"
+        android:visibility="gone"
+        android:layout_marginStart="2dp" />
+
     <TextView
         android:id="@+id/txtFolderName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_toEndOf="@id/checkIcon"
+        android:layout_marginStart="8dp"
         android:textSize="18sp"
         android:textColor="#000000" />
 
@@ -17,7 +29,7 @@
         android:id="@+id/deleteIcon"
         android:layout_width="24dp"
         android:layout_height="24dp"
-        android:layout_alignParentRight="true"
+        android:layout_alignParentEnd="true"
         android:src="@drawable/delete_icn"
         android:visibility="gone" />
 

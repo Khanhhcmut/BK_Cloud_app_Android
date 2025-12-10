@@ -47,11 +47,13 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
     public static class ViewHolder extends RecyclerView.ViewHolder {
         TextView txtFolderName;
         ImageView deleteIcon;
+        ImageView checkIcon;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             txtFolderName = itemView.findViewById(R.id.txtFolderName);
             deleteIcon = itemView.findViewById(R.id.deleteIcon);
+            checkIcon = itemView.findViewById(R.id.checkIcon);
         }
     }
 
@@ -94,12 +96,7 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
 
                 if (event.getAction() == MotionEvent.ACTION_UP ||
                         event.getAction() == MotionEvent.ACTION_CANCEL) {
-
                     handler.removeCallbacksAndMessages(null);
-
-                    if (deleteMode && !isLong) {
-                        if (deleteListener != null) deleteListener.onToggleSelect(key);
-                    }
                 }
 
                 return false;
@@ -107,18 +104,14 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
         });
 
         holder.itemView.setOnClickListener(v -> {
-            if (deleteMode) {
-                if (deleteListener != null) deleteListener.onToggleSelect(key);
-                return;
-            }
+            if (deleteMode) return;
 
-            // logic cũ khi không ở delete mode
             if (item.name.equals(selectedFolderName)) {
                 selectedFolderName = null;
-                listener.onClick(null);
+                if (listener != null) listener.onClick(null);
             } else {
                 selectedFolderName = item.name;
-                listener.onClick(item.name);
+                if (listener != null) listener.onClick(item.name);
             }
             notifyDataSetChanged();
         });
@@ -129,7 +122,10 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
 
         if (deleteMode) {
             holder.deleteIcon.setVisibility(View.VISIBLE);
-
+            holder.checkIcon.setVisibility(View.VISIBLE);
+            holder.checkIcon.setOnClickListener(v -> {
+                if (deleteListener != null) deleteListener.onToggleSelect(key);
+            });
             if (selectedSet.contains(item.name)) {
                 holder.itemView.setBackgroundColor(Color.parseColor("#33FF0000"));
             } else {
@@ -138,6 +134,7 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
 
         } else {
             holder.deleteIcon.setVisibility(View.GONE);
+            holder.checkIcon.setVisibility(View.GONE);
 
             if (item.name.equals(selectedFolderName)) {
                 holder.itemView.setBackgroundResource(R.drawable.folder_selected_bg);

@@ -91,7 +91,7 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
                     handler.postDelayed(() -> {
                         isLong = true;
                         if (listener != null) listener.onLongPress(key);
-                    }, 1500);
+                    }, 1000);
                 }
 
                 if (event.getAction() == MotionEvent.ACTION_UP ||

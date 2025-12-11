@@ -382,11 +382,6 @@ public class HomeActivity extends AppCompatActivity {
                     startActivityForResult(i, 1002);
                 });
 
-                btnDownload.setOnClickListener(x -> {
-                    dialog.dismiss();
-                    handleDownloadRequest();
-                });
-
             } else {
 
                 txtTitle.setText("Upload options");
@@ -636,8 +631,32 @@ public class HomeActivity extends AppCompatActivity {
 
     public void onDeleteIconClick() {
         if (selectedDeleteItems.isEmpty()) return;
+        showActionDialog();
+    }
 
-        showDeleteConfirmDialog();
+    private void showActionDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.setContentView(R.layout.dialog_confirm_download_delete);
+
+        Button btnDownload = dialog.findViewById(R.id.btnDownload);
+        Button btnDelete = dialog.findViewById(R.id.btnDelete);
+        Button btnCancel = dialog.findViewById(R.id.btnCancel);
+
+        btnDownload.setOnClickListener(v -> {
+            dialog.dismiss();
+
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            startActivityForResult(intent, 9001);   // dùng hệ thống download sẵn có
+        });
+
+        btnDelete.setOnClickListener(v -> {
+            dialog.dismiss();
+            showDeleteConfirmDialog();
+        });
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
     }
 
     private void showDeleteConfirmDialog() {
@@ -1502,9 +1521,25 @@ public class HomeActivity extends AppCompatActivity {
     private void downloadFolder(OkHttpClient client, DocumentFile root, String folderName) {
         try {
             DocumentFile localFolder = root.findFile(folderName);
-            if (localFolder == null) {
+
+            if (localFolder != null) {
+                int index = 1;
+                String newName;
+
+                while (true) {
+                    newName = folderName + "(" + index + ")";
+                    DocumentFile check = root.findFile(newName);
+                    if (check == null) {
+                        localFolder = root.createDirectory(newName);
+                        break;
+                    }
+                    index++;
+                }
+
+            } else {
                 localFolder = root.createDirectory(folderName);
             }
+
             if (localFolder == null) return;
 
             String url = storageUrl + "/" + folderName + "?format=json";

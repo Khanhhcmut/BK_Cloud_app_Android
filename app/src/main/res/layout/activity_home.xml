@@ -39,6 +39,37 @@
                 android:drawableEnd="@drawable/close_icn"
                 android:drawablePadding="8dp" />
 
+            <!-- Storage usage bar -->
+            <LinearLayout
+                android:id="@+id/layoutUsage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <ProgressBar
+                    android:id="@+id/progressStorage"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="8dp"
+                    android:layout_weight="1"
+                    android:progress="0"
+                    android:max="100"
+                    android:layout_marginEnd="8dp"/>
+
+                <TextView
+                    android:id="@+id/txtStorageUsage"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="110dp"
+                    android:text="0 B / 0 B"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:gravity="end"/>
+            </LinearLayout>
+
+
             <!-- Folder label -->
             <RelativeLayout
                 android:layout_width="match_parent"
@@ -66,7 +97,7 @@
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerFolders"
                 android:layout_width="match_parent"
-                android:layout_height="180dp"
+                android:layout_height="150dp"
                 android:background="@drawable/item_card_bg"
                 android:padding="6dp"/>
 

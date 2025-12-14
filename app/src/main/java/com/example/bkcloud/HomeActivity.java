@@ -100,7 +100,7 @@ public class HomeActivity extends AppCompatActivity {
     Set<String> selectedDeleteItems = new HashSet<>();
     List<FolderAdapter.FolderItem> currentFoldersList = new ArrayList<>();
     List<FileAdapter.FileItem> currentFileList = new ArrayList<>();
-    private static final byte[] SECRET_KEY = "bkcloud-secret-key".getBytes(StandardCharsets.UTF_8);
+    static final byte[] SECRET_KEY = "bkcloud-secret-key".getBytes(StandardCharsets.UTF_8);
 
     TextView txtStorageUsage;
     ProgressBar progressStorage;

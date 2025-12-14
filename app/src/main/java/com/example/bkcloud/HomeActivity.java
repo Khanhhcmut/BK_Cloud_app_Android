@@ -117,6 +117,8 @@ public class HomeActivity extends AppCompatActivity {
     PieChart pieChart;
     TextView txtPieUsage;
 
+    Button btnSetBackupTime, btnChooseBackupFolder, btnBackupNow, btnClearBackup;
+    TextView txtBackupStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -137,6 +139,13 @@ public class HomeActivity extends AppCompatActivity {
 
         txtStorageUsage = findViewById(R.id.txtStorageUsage);
         progressStorage = findViewById(R.id.progressStorage);
+
+        btnSetBackupTime = findViewById(R.id.btnSetBackupTime);
+        btnChooseBackupFolder = findViewById(R.id.btnChooseBackupFolder);
+        btnBackupNow = findViewById(R.id.btnBackupNow);
+        btnClearBackup = findViewById(R.id.btnClearBackup);
+        txtBackupStatus = findViewById(R.id.txtBackupStatus);
+
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override

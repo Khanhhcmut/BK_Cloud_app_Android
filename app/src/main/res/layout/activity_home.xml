@@ -298,14 +298,59 @@
                     android:padding="6dp"/>
             </LinearLayout>
 
-            <!-- BACKUP (BLANK) -->
+            <!-- BACKUP -->
             <LinearLayout
                 android:id="@+id/layoutBackup"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:gravity="center"
-                android:visibility="gone"/>
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Backup"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="16dp"/>
+
+                <Button
+                    android:id="@+id/btnSetBackupTime"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="🕒 Set backup time"/>
+
+                <Button
+                    android:id="@+id/btnChooseBackupFolder"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="📂 Select backup folder"
+                    android:layout_marginTop="12dp"/>
+
+                <Button
+                    android:id="@+id/btnBackupNow"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="⚡ Backup now"
+                    android:layout_marginTop="12dp"/>
+
+                <Button
+                    android:id="@+id/btnClearBackup"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="🗑 Clear backup setting"
+                    android:layout_marginTop="12dp"/>
+
+                <TextView
+                    android:id="@+id/txtBackupStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Backup is not set up yet"
+                    android:textColor="#666"
+                    android:layout_marginTop="20dp"/>
+            </LinearLayout>
+
         </FrameLayout>
 
         <!-- BOTTOM BAR + FAB -->

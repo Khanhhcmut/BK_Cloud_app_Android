@@ -28,6 +28,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -41,6 +42,8 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -57,6 +60,7 @@ import okio.BufferedSink;
 
 import androidx.documentfile.provider.DocumentFile;
 import android.util.Pair;
+import android.util.Log;
 
 
 public class HomeActivity extends AppCompatActivity {
@@ -90,11 +94,26 @@ public class HomeActivity extends AppCompatActivity {
     List<FolderAdapter.FolderItem> currentFoldersList = new ArrayList<>();
     List<FileAdapter.FileItem> currentFileList = new ArrayList<>();
 
+    private static final byte[] SECRET_KEY = "bkcloud-secret-key".getBytes(StandardCharsets.UTF_8);
+    private byte[] xor(byte[] data, byte[] key) {
+        byte[] out = new byte[data.length];
+        for (int i = 0; i < data.length; i++) {
+            out[i] = (byte) (data[i] ^ key[i % key.length]);
+        }
+        return out;
+    }
+    TextView txtStorageUsage;
+    ProgressBar progressStorage;
+    long totalQuotaBytes = 0;
+    long usedBytes = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
+
+        txtStorageUsage = findViewById(R.id.txtStorageUsage);
+        progressStorage = findViewById(R.id.progressStorage);
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -409,30 +428,14 @@ public class HomeActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.btnRefresh).setOnClickListener(v -> {
-            currentSelectedFolder = null;
-            fileAdapter = new FileAdapter(new ArrayList<>());
-            fileAdapter.setListener(new FileAdapter.FileListener() {
-                @Override
-                public void onLongPress(String key) {
-                    HomeActivity.this.onItemLongPress(key);
-                }
-                @Override
-                public void onToggleSelect(String key) {
-                    HomeActivity.this.onItemToggle(key);
-                }
-                @Override
-                public void onClickDeleteIcon() {
-                    HomeActivity.this.onDeleteIconClick();
-                }
-            });
-            recyclerFiles.setAdapter(fileAdapter);
-            loadFolders();
-            Toast.makeText(this, "Refresh", Toast.LENGTH_SHORT).show();
+            doRefresh(true);
         });
 
         btnBackup.setOnClickListener(v -> {
             Toast.makeText(this, "Open Backup", Toast.LENGTH_SHORT).show();
         });
+
+        loadCloudQuotaFromConfig();
 
     }
 
@@ -682,7 +685,7 @@ public class HomeActivity extends AppCompatActivity {
             for (String key : selectedDeleteItems) {
                 try {
                     String low = key.toLowerCase();
-                    if (!key.contains("/") && (low.equals("backup") || low.equals("dicom") || low.equals("config"))) {
+                    if (!key.contains("/") && (low.equals("config"))) {
                         continue;
                     }
 
@@ -749,11 +752,12 @@ public class HomeActivity extends AppCompatActivity {
                 loadFolders();
                 if (currentSelectedFolder != null) loadFiles(currentSelectedFolder);
                 Toast.makeText(this, "Delete complete", Toast.LENGTH_SHORT).show();
+                doRefresh(false);
+                loadCloudQuotaFromConfig();
             });
 
         }).start();
     }
-
 
     private void doLogout() {
         token = "";
@@ -808,12 +812,10 @@ public class HomeActivity extends AppCompatActivity {
 
         btnSave.setOnClickListener(v -> {
             String pass = edt.getText().toString().trim();
-
             if (pass.isEmpty()) {
                 Toast.makeText(this, "Password required!", Toast.LENGTH_SHORT).show();
                 return;
             }
-
             validateUserPassword(user, pass);
             dialog.dismiss();
         });
@@ -839,16 +841,17 @@ public class HomeActivity extends AppCompatActivity {
                     refreshUserSpinnerInNav();
 
                     loadFolders();
-
+                    loadCloudQuotaFromConfig();
                     Toast.makeText(HomeActivity.this, "Switched to " + username, Toast.LENGTH_SHORT).show();
                 });
             }
 
             @Override
             public void onError(String message) {
-                runOnUiThread(() ->
-                        Toast.makeText(HomeActivity.this, message, Toast.LENGTH_SHORT).show()
-                );
+                runOnUiThread(() -> {
+                    Toast.makeText(HomeActivity.this, "Wrong password", Toast.LENGTH_SHORT).show();
+                    userSpinner.setSelection(lastValidSelection);
+                });
             }
         });
 
@@ -1035,6 +1038,22 @@ public class HomeActivity extends AppCompatActivity {
                 return;
             }
 
+            long totalSize = 0;
+
+            if (data.getClipData() != null) {
+                for (int i = 0; i < data.getClipData().getItemCount(); i++) {
+                    Uri uri = data.getClipData().getItemAt(i).getUri();
+                    totalSize += getFileSize(uri);
+                }
+            } else if (data.getData() != null) {
+                totalSize = getFileSize(data.getData());
+            }
+
+            if (!canUpload(totalSize)) {
+                Toast.makeText(this, "Not enough storage quota", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
             if (data.getClipData() != null) {
                 int count = data.getClipData().getItemCount();
                 pendingUpload = count;
@@ -1051,6 +1070,7 @@ public class HomeActivity extends AppCompatActivity {
                             loadFiles(currentSelectedFolder);
                             loadFolders();
                             Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
+                            loadCloudQuotaFromConfig();
                         }
                     });
                 }
@@ -1058,6 +1078,12 @@ public class HomeActivity extends AppCompatActivity {
             } else if (data.getData() != null) {
                 Uri fileUri = data.getData();
                 String fileName = getFileName(fileUri);
+
+                long size = getFileSize(fileUri);
+                if (!canUpload(size)) {
+                    Toast.makeText(this, "Not enough storage quota", Toast.LENGTH_SHORT).show();
+                    return;
+                }
 
                 pendingUpload = 1;
                 batchUploadMode = true;
@@ -1068,6 +1094,7 @@ public class HomeActivity extends AppCompatActivity {
                     loadFiles(currentSelectedFolder);
                     loadFolders();
                     Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
+                    loadCloudQuotaFromConfig();
                 });
             }
 
@@ -1214,12 +1241,25 @@ public class HomeActivity extends AppCompatActivity {
                 List<Pair<String, Uri>> files = new ArrayList<>();
                 collectFilesRecursively(dir, basePath, files);
 
+                long totalSize = 0;
+                for (Pair<String, Uri> p : files) {
+                    totalSize += getFileSize(p.second);
+                }
+
+                if (!canUpload(totalSize)) {
+                    runOnUiThread(() ->
+                            Toast.makeText(this, "Not enough storage quota", Toast.LENGTH_SHORT).show()
+                    );
+                    return;
+                }
+
                 int total = files.size();
 
                 if (total == 0) {
                     runOnUiThread(() -> {
                         loadFolders();
                         Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
+                        loadCloudQuotaFromConfig();
                     });
                     return;
                 }
@@ -1239,6 +1279,7 @@ public class HomeActivity extends AppCompatActivity {
                                 }
                                 loadFolders();
                                 Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
+                                loadCloudQuotaFromConfig();
                             });
                         }
                     });
@@ -1453,16 +1494,6 @@ public class HomeActivity extends AppCompatActivity {
         Toast.makeText(this, msgs[mode], Toast.LENGTH_SHORT).show();
     }
 
-    private void handleDownloadRequest() {
-        if (!deleteMode || selectedDeleteItems.isEmpty()) {
-            Toast.makeText(this, "No items selected!", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        startActivityForResult(intent, 9001);
-    }
-
     private void startBatchDownload(Uri targetDirUri) {
         new Thread(() -> {
             DocumentFile root = DocumentFile.fromTreeUri(this, targetDirUri);
@@ -1561,6 +1592,198 @@ public class HomeActivity extends AppCompatActivity {
 
         } catch (Exception ignored) {}
     }
+
+    private void loadCloudQuotaFromConfig() {
+        new Thread(() -> {
+            try {
+                OkHttpClient client = new OkHttpClient();
+
+                Request putReq = new Request.Builder()
+                        .url(storageUrl + "/config")
+                        .addHeader("X-Auth-Token", token)
+                        .put(RequestBody.create(new byte[0], null))
+                        .build();
+                client.newCall(putReq).execute();
+
+                totalQuotaBytes = (long) (0.1 * 1024 * 1024 * 1024);
+                usedBytes = 0;
+
+                String url = storageUrl + "/config/config.json";
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("X-Auth-Token", token)
+                        .get()
+                        .build();
+
+                Response resp = client.newCall(req).execute();
+
+                if (resp.isSuccessful()) {
+                    String base64Text = resp.body().string();
+                    byte[] encrypted = base64Text.getBytes(StandardCharsets.UTF_8);
+                    String json = decryptConfig(encrypted);
+
+                    JSONObject obj = new JSONObject(json);
+                    JSONObject users = obj.optJSONObject("users");
+
+                    if (users != null) {
+                        JSONObject me = users.optJSONObject(username.trim());
+                        if (me != null && me.has("quota_gb")) {
+                            double quotaGb = me.getDouble("quota_gb");
+                            totalQuotaBytes = (long) (quotaGb * 1024 * 1024 * 1024);
+                        }
+                    }
+                }
+
+                calculateUsedBytesFromSwift();
+
+            } catch (Exception e) {
+                totalQuotaBytes = (long) (0.1 * 1024 * 1024 * 1024);
+                usedBytes = 0;
+                calculateUsedBytesFromSwift();
+            }
+        }).start();
+    }
+
+
+    private String formatSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+        String unit = "KMGTPE".charAt(exp - 1) + "B";
+        return String.format("%.1f %s", bytes / Math.pow(1024, exp), unit);
+    }
+
+    private String decryptConfig(byte[] encryptedFile) throws Exception {
+
+        // 1. Base64 decode
+        byte[] encrypted = android.util.Base64.decode(
+                encryptedFile,
+                android.util.Base64.DEFAULT
+        );
+
+        // 2. XOR decrypt
+        byte[] decrypted = new byte[encrypted.length];
+        for (int i = 0; i < encrypted.length; i++) {
+            decrypted[i] = (byte) (encrypted[i] ^ SECRET_KEY[i % SECRET_KEY.length]);
+        }
+
+        // 3. JSON string
+        return new String(decrypted, StandardCharsets.UTF_8);
+    }
+
+    private boolean canUpload(long uploadSize) {
+        if (totalQuotaBytes <= 0) return false;
+        return usedBytes + uploadSize <= totalQuotaBytes;
+    }
+
+    private long getFileSize(Uri uri) {
+        try (Cursor c = getContentResolver().query(uri, null, null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                int idx = c.getColumnIndex(OpenableColumns.SIZE);
+                if (idx != -1) return c.getLong(idx);
+            }
+        }
+        return 0;
+    }
+
+    private void updateStorageBar() {
+        if (totalQuotaBytes <= 0) return;
+
+        int percent = (int) ((usedBytes * 100) / totalQuotaBytes);
+        progressStorage.setProgress(percent);
+
+        if (percent < 80) {
+            progressStorage.setProgressTintList(
+                    android.content.res.ColorStateList.valueOf(0xFF4CAF50)); // xanh
+        } else if (percent < 95) {
+            progressStorage.setProgressTintList(
+                    android.content.res.ColorStateList.valueOf(0xFFFF9800)); // cam
+        } else {
+            progressStorage.setProgressTintList(
+                    android.content.res.ColorStateList.valueOf(0xFFF44336)); // đỏ
+        }
+
+        txtStorageUsage.setText(
+                formatSize(usedBytes) + " / " + formatSize(totalQuotaBytes)
+        );
+    }
+
+    private void calculateUsedBytesFromSwift() {
+        new Thread(() -> {
+            long total = 0;
+            try {
+                OkHttpClient client = new OkHttpClient();
+
+                // list containers
+                Request listReq = new Request.Builder()
+                        .url(storageUrl)
+                        .addHeader("X-Auth-Token", token)
+                        .get()
+                        .build();
+
+                Response listResp = client.newCall(listReq).execute();
+                if (!listResp.isSuccessful()) return;
+
+                String[] containers = listResp.body().string().split("\n");
+
+                for (String container : containers) {
+                    container = container.trim();
+                    if (container.isEmpty() || container.equalsIgnoreCase("config"))
+                        continue;
+
+                    Request req = new Request.Builder()
+                            .url(storageUrl + "/" + container + "?format=json")
+                            .addHeader("X-Auth-Token", token)
+                            .get()
+                            .build();
+
+                    Response resp = client.newCall(req).execute();
+                    if (!resp.isSuccessful()) continue;
+
+                    JSONArray arr = new JSONArray(resp.body().string());
+                    for (int i = 0; i < arr.length(); i++) {
+                        total += arr.getJSONObject(i).optLong("bytes", 0);
+                    }
+                }
+
+            } catch (Exception e) {
+                return;
+            }
+
+            usedBytes = total;
+            runOnUiThread(this::updateStorageBar);
+        }).start();
+    }
+
+    private void doRefresh(boolean showToast) {
+        currentSelectedFolder = null;
+
+        fileAdapter = new FileAdapter(new ArrayList<>());
+        fileAdapter.setListener(new FileAdapter.FileListener() {
+            @Override
+            public void onLongPress(String key) {
+                HomeActivity.this.onItemLongPress(key);
+            }
+
+            @Override
+            public void onToggleSelect(String key) {
+                HomeActivity.this.onItemToggle(key);
+            }
+
+            @Override
+            public void onClickDeleteIcon() {
+                HomeActivity.this.onDeleteIconClick();
+            }
+        });
+
+        recyclerFiles.setAdapter(fileAdapter);
+        loadFolders();
+        loadCloudQuotaFromConfig();
+
+        if (showToast) {
+            Toast.makeText(this, "Refresh", Toast.LENGTH_SHORT).show();
+        }
+    }
+
 
 }
 

@@ -60,7 +60,6 @@ import okio.BufferedSink;
 
 import androidx.documentfile.provider.DocumentFile;
 import android.util.Pair;
-import android.util.Log;
 
 
 public class HomeActivity extends AppCompatActivity {
@@ -93,24 +92,33 @@ public class HomeActivity extends AppCompatActivity {
     Set<String> selectedDeleteItems = new HashSet<>();
     List<FolderAdapter.FolderItem> currentFoldersList = new ArrayList<>();
     List<FileAdapter.FileItem> currentFileList = new ArrayList<>();
-
     private static final byte[] SECRET_KEY = "bkcloud-secret-key".getBytes(StandardCharsets.UTF_8);
-    private byte[] xor(byte[] data, byte[] key) {
-        byte[] out = new byte[data.length];
-        for (int i = 0; i < data.length; i++) {
-            out[i] = (byte) (data[i] ^ key[i % key.length]);
-        }
-        return out;
-    }
+
     TextView txtStorageUsage;
     ProgressBar progressStorage;
     long totalQuotaBytes = 0;
     long usedBytes = 0;
 
+    TextView txtDocCount;
+    TextView txtImageCount;
+    TextView txtVideoCount;
+    TextView txtAudioCount;
+    TextView txtOtherCount;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
+
+        LinearLayout layoutDashboard = findViewById(R.id.layoutDashboard);
+        LinearLayout layoutMyFiles = findViewById(R.id.layoutMyFiles);
+
+        txtDocCount = findViewById(R.id.txtDocCount);
+        txtImageCount = findViewById(R.id.txtImageCount);
+        txtVideoCount = findViewById(R.id.txtVideoCount);
+        txtAudioCount = findViewById(R.id.txtAudioCount);
+        txtOtherCount = findViewById(R.id.txtOtherCount);
 
         txtStorageUsage = findViewById(R.id.txtStorageUsage);
         progressStorage = findViewById(R.id.progressStorage);
@@ -249,32 +257,14 @@ public class HomeActivity extends AppCompatActivity {
                 startActivity(intent);
             }
             else if (id == R.id.nav_myfile) {
-                currentSelectedFolder = null;
-
-                fileAdapter = new FileAdapter(new ArrayList<>());
-                fileAdapter.setListener(new FileAdapter.FileListener() {
-                    @Override
-                    public void onLongPress(String key) {
-                        HomeActivity.this.onItemLongPress(key);
-                    }
-
-                    @Override
-                    public void onToggleSelect(String key) {
-                        HomeActivity.this.onItemToggle(key);
-                    }
-
-                    @Override
-                    public void onClickDeleteIcon() {
-                        HomeActivity.this.onDeleteIconClick();
-                    }
-                });
-
-                recyclerFiles.setAdapter(fileAdapter);
-                loadFolders();
-                Toast.makeText(this, "My Files", Toast.LENGTH_SHORT).show();
+                layoutDashboard.setVisibility(View.GONE);
+                layoutMyFilesContent.setVisibility(View.VISIBLE);
             }
             else if (id == R.id.nav_dashboard) {
-                Toast.makeText(this, "Dashboard", Toast.LENGTH_SHORT).show();
+                layoutDashboard.setVisibility(View.VISIBLE);
+                layoutMyFilesContent.setVisibility(View.GONE);
+
+                recyclerFolders.postDelayed(this::updateDashboardStats, 300);
             }
             else if (id == R.id.nav_backup) {
                 Toast.makeText(this, "Backup", Toast.LENGTH_SHORT).show();
@@ -363,14 +353,15 @@ public class HomeActivity extends AppCompatActivity {
         FloatingActionButton fabCenter = findViewById(R.id.fabCenter);
 
         btnDashboard.setOnClickListener(v -> {
-            Toast.makeText(this, "Open Dashboard", Toast.LENGTH_SHORT).show();
+            layoutDashboard.setVisibility(View.VISIBLE);
+            layoutMyFiles.setVisibility(View.GONE);
 
+            recyclerFolders.postDelayed(this::updateDashboardStats, 300);
         });
 
         findViewById(R.id.btnMyFiles).setOnClickListener(v -> {
-            loadFolders();
-            if (currentSelectedFolder != null)
-                loadFiles(currentSelectedFolder);
+            layoutDashboard.setVisibility(View.GONE);
+            layoutMyFiles.setVisibility(View.VISIBLE);
         });
 
         fabCenter.setOnClickListener(v -> {
@@ -520,21 +511,17 @@ public class HomeActivity extends AppCompatActivity {
                             public void onLongPress(String name) {
                                 HomeActivity.this.onItemLongPress(name);
                             }
-
                             @Override
                             public void onToggleSelect(String name) {
                                 HomeActivity.this.onItemToggle(name);
                             }
-
                             @Override
                             public void onDeleteIcon() {
                                 HomeActivity.this.onDeleteIconClick();
                             }
                         };
                     });
-
                 }
-
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -752,8 +739,8 @@ public class HomeActivity extends AppCompatActivity {
                 loadFolders();
                 if (currentSelectedFolder != null) loadFiles(currentSelectedFolder);
                 Toast.makeText(this, "Delete complete", Toast.LENGTH_SHORT).show();
-                doRefresh(false);
                 loadCloudQuotaFromConfig();
+                doRefresh(false);
             });
 
         }).start();
@@ -1071,6 +1058,7 @@ public class HomeActivity extends AppCompatActivity {
                             loadFolders();
                             Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
                             loadCloudQuotaFromConfig();
+                            doRefresh(false);
                         }
                     });
                 }
@@ -1095,6 +1083,7 @@ public class HomeActivity extends AppCompatActivity {
                     loadFolders();
                     Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
                     loadCloudQuotaFromConfig();
+                    doRefresh(false);
                 });
             }
 
@@ -1260,6 +1249,7 @@ public class HomeActivity extends AppCompatActivity {
                         loadFolders();
                         Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
                         loadCloudQuotaFromConfig();
+                        doRefresh(false);
                     });
                     return;
                 }
@@ -1280,6 +1270,7 @@ public class HomeActivity extends AppCompatActivity {
                                 loadFolders();
                                 Toast.makeText(this, "Upload completed", Toast.LENGTH_SHORT).show();
                                 loadCloudQuotaFromConfig();
+                                doRefresh(false);
                             });
                         }
                     });
@@ -1782,6 +1773,45 @@ public class HomeActivity extends AppCompatActivity {
         if (showToast) {
             Toast.makeText(this, "Refresh", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void updateDashboardStats() {
+        int docs = 0, images = 0, videos = 0, audios = 0, others = 0;
+
+        for (FileAdapter.FileItem f : allFiles) {
+            String n = f.name.toLowerCase();
+
+            if (n.endsWith(".pdf") || n.endsWith(".doc") || n.endsWith(".docx")
+                    || n.endsWith(".xls") || n.endsWith(".xlsx")
+                    || n.endsWith(".ppt") || n.endsWith(".pptx")
+                    || n.endsWith(".txt")) {
+                docs++;
+            } else if (n.endsWith(".jpg") || n.endsWith(".png")
+                    || n.endsWith(".jpeg") || n.endsWith(".gif")) {
+                images++;
+            } else if (n.endsWith(".mp4") || n.endsWith(".mkv")
+                    || n.endsWith(".avi")) {
+                videos++;
+            } else if (n.endsWith(".mp3") || n.endsWith(".wav")) {
+                audios++;
+            } else {
+                others++;
+            }
+        }
+
+        final int fDocs = docs;
+        final int fImages = images;
+        final int fVideos = videos;
+        final int fAudios = audios;
+        final int fOthers = others;
+
+        runOnUiThread(() -> {
+            txtDocCount.setText("Documents: " + fDocs);
+            txtImageCount.setText("Images: " + fImages);
+            txtVideoCount.setText("Videos: " + fVideos);
+            txtAudioCount.setText("Audios: " + fAudios);
+            txtOtherCount.setText("Others: " + fOthers);
+        });
     }
 
 

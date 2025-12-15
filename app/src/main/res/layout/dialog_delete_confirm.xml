@@ -12,6 +12,7 @@
         android:id="@+id/txtTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:textColor="@color/black"
         android:text="Are you sure ?"
         android:textSize="16sp"
         android:textStyle="bold"
@@ -21,6 +22,7 @@
         android:id="@+id/txt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:textColor="@color/black"
         android:text="Do you want to delete selected items?"
         android:textSize="16sp"
         android:paddingBottom="8dp" />

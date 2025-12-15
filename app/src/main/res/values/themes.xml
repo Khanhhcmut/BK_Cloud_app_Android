@@ -1,17 +1,30 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Base.Theme.BKcloud" parent="Theme.Material3.DayNight.NoActionBar">
+<resources>
+
+    <style name="Base.Theme.BKcloud"
+        parent="Theme.MaterialComponents.Light.NoActionBar">
+
+        <!-- Primary color -->
         <item name="colorPrimary">#2196F3</item>
-        <item name="titleTextAppearance">@style/BoldToolbarTitle</item>
+        <item name="colorPrimaryVariant">#1976D2</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+
+        <!-- Background -->
+        <item name="android:colorBackground">@android:color/white</item>
+
+        <!-- Toolbar -->
         <item name="toolbarStyle">@style/Widget.BoldToolbar</item>
     </style>
 
-    <style name="BoldToolbarTitle" parent="TextAppearance.Material3.TitleLarge">
-        <item name="android:textStyle">bold</item>
-    </style>
-
-    <style name="Widget.BoldToolbar" parent="Widget.Material3.Toolbar">
+    <style name="Widget.BoldToolbar"
+        parent="Widget.MaterialComponents.Toolbar">
         <item name="titleTextAppearance">@style/BoldToolbarTitle</item>
     </style>
 
+    <style name="BoldToolbarTitle"
+        parent="TextAppearance.MaterialComponents.Headline6">
+        <item name="android:textStyle">bold</item>
+    </style>
+
     <style name="Theme.BKcloud" parent="Base.Theme.BKcloud" />
+
 </resources>

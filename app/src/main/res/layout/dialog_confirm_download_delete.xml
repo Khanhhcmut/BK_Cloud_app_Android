@@ -13,6 +13,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Select action"
+        android:textColor="@color/black"
         android:textSize="16sp"
         android:textStyle="bold"
         android:paddingBottom="8dp" />
@@ -21,6 +22,7 @@
         android:id="@+id/txt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:textColor="@color/black"
         android:text="Do you want to download or delete selected items?"
         android:textSize="16sp"
         android:paddingBottom="8dp" />

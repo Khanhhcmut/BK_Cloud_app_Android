@@ -246,6 +246,7 @@
                         android:id="@+id/lblFolders"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:textColor="@color/black"
                         android:text="Folders"
                         android:textSize="18sp"
                         android:textStyle="bold" />
@@ -276,6 +277,7 @@
                         android:id="@+id/lblFiles"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:textColor="@color/black"
                         android:text="Files"
                         android:textSize="18sp"
                         android:textStyle="bold" />

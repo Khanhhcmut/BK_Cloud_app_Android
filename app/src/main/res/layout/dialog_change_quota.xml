@@ -11,6 +11,7 @@
     <TextView
         android:id="@+id/txtTitle"
         android:text="Change Cloud Storage Limit"
+        android:textColor="@color/black"
         android:textSize="16sp"
         android:textStyle="bold"
         android:paddingBottom="8dp"
@@ -20,6 +21,7 @@
     <TextView
         android:id="@+id/txtMessage"
         android:text="Enter admin password and new quota (GB)"
+        android:textColor="@color/black"
         android:textSize="16sp"
         android:paddingBottom="12dp"
         android:layout_width="wrap_content"

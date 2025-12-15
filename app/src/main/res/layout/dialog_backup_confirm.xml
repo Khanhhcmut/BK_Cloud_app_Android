@@ -13,6 +13,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Backup"
+        android:textColor="@color/black"
         android:textSize="16sp"
         android:textStyle="bold"
         android:paddingBottom="8dp" />
@@ -22,6 +23,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Start backup now?"
+        android:textColor="@color/black"
         android:textSize="16sp"
         android:paddingBottom="12dp" />
 

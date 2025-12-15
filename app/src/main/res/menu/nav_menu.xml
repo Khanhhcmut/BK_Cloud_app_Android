@@ -11,7 +11,7 @@
 
         <item
             android:id="@+id/nav_myfile"
-            android:title="My File"
+            android:title="My Files"
             android:icon="@drawable/myfile_icn"/>
 
         <item

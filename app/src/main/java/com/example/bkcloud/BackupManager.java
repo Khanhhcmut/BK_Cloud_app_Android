@@ -364,6 +364,31 @@ public class BackupManager {
                 return;
             }
 
+            long backupSize = 0;
+
+            for (String uriStr : getFolders(c)) {
+                android.net.Uri uri = android.net.Uri.parse(uriStr);
+                backupSize += calculateFolderSize(c, uri);
+            }
+
+            if (c instanceof HomeActivity) {
+                HomeActivity act = (HomeActivity) c;
+                long available = act.totalQuotaBytes - act.usedBytes;
+
+                if (backupSize > available) {
+                    android.os.Handler h =
+                            new android.os.Handler(android.os.Looper.getMainLooper());
+                    h.post(() ->
+                            Toast.makeText(
+                                    c,
+                                    "Not enough storage for backup",
+                                    Toast.LENGTH_LONG
+                            ).show()
+                    );
+                    return;
+                }
+            }
+
             ensureBackupContainer();
 
             int total = 0;
@@ -543,5 +568,27 @@ public class BackupManager {
             Log.e("BACKUP", "Upload error", e);
         }
     }
+
+    private static long calculateFolderSize(Context c, android.net.Uri treeUri) {
+
+        DocumentFile root = DocumentFile.fromTreeUri(c, treeUri);
+        if (root == null) return 0;
+
+        return calculateRecursive(root);
+    }
+
+    private static long calculateRecursive(DocumentFile f) {
+
+        if (f.isDirectory()) {
+            long total = 0;
+            for (DocumentFile ch : f.listFiles()) {
+                total += calculateRecursive(ch);
+            }
+            return total;
+        }
+
+        return f.length();
+    }
+
 
 }

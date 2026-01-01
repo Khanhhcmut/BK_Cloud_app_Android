@@ -14,7 +14,7 @@
             android:id="@+id/txtTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="BK Cloud App User Manual"
+            android:text="SWIFT Cloud App User Manual"
             android:textColor="@color/black"
             android:textSize="30sp"
             android:gravity="center"

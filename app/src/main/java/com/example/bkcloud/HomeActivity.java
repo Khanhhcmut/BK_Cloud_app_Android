@@ -1636,6 +1636,38 @@ public class HomeActivity extends AppCompatActivity {
         }).start();
     }
 
+    private boolean documentFileExists(DocumentFile dir, String name) {
+        for (DocumentFile f : dir.listFiles()) {
+            if (name.equals(f.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String generateUniqueDownloadName(DocumentFile dir, String originalName) {
+        String base;
+        String ext = "";
+
+        int dot = originalName.lastIndexOf(".");
+        if (dot != -1) {
+            base = originalName.substring(0, dot);
+            ext = originalName.substring(dot); // .txt
+        } else {
+            base = originalName;
+        }
+
+        String name = originalName;
+        int index = 1;
+
+        while (documentFileExists(dir, name)) {
+            name = base + "(" + index + ")" + ext;
+            index++;
+        }
+
+        return name;
+    }
+
     private void downloadSingleFile(OkHttpClient client, DocumentFile root, String folder, String name) {
         try {
             String url = storageUrl + "/" + folder + "/" + name;
@@ -1647,9 +1679,13 @@ public class HomeActivity extends AppCompatActivity {
                     .build();
 
             Response resp = client.newCall(req).execute();
+            if (!resp.isSuccessful()) return;
+
             byte[] data = resp.body().bytes();
 
-            DocumentFile out = root.createFile("*/*", name);
+            String finalName = generateUniqueDownloadName(root, name);
+
+            DocumentFile out = root.createFile("*/*", finalName);
             if (out == null) return;
 
             try (OutputStream os = getContentResolver().openOutputStream(out.getUri())) {
@@ -1658,6 +1694,7 @@ public class HomeActivity extends AppCompatActivity {
 
         } catch (Exception ignored) {}
     }
+
 
     private void downloadFolder(OkHttpClient client, DocumentFile root, String folderName) {
         try {

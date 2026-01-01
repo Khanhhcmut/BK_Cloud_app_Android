@@ -1,6 +1,6 @@
-# BK Cloud App – User Manual
+# SWIFT Cloud App – User Manual
 
-Tài liệu hướng dẫn sử dụng **BK Cloud App**, mô tả các chức năng chính và cách thao tác trong ứng dụng.
+Tài liệu hướng dẫn sử dụng **SWIFT Cloud App**, mô tả các chức năng chính và cách thao tác trong ứng dụng.
 
 ## 1. Đăng nhập vào ứng dụng
 
